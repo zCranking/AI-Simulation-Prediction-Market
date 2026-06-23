@@ -52,7 +52,7 @@ export default function RealtimeMarket({
   const [predictions, setPredictions] = useState(initialPredictions)
   const [questions, setQuestions] = useState(initialQuestions)
   const [votes, setVotes] = useState(initialVotes)
-  const [candidates] = useState(initialCandidates)
+  const [candidates, setCandidates] = useState(initialCandidates)
 
   const positions = useMemo(() => {
     const found = [...new Set(candidates.map((c) => c.position).filter(Boolean))]
@@ -62,6 +62,11 @@ export default function RealtimeMarket({
   }, [candidates])
 
   const [activePosition, setActivePosition] = useState<string>(positions[0] ?? '')
+
+  useEffect(() => {
+    if (!activePosition || positions.includes(activePosition)) return
+    setActivePosition(positions[0] ?? '')
+  }, [activePosition, positions])
 
   const withProb: CandidateWithProbability[] = useMemo(
     () => computeProbabilities(candidates, predictions, questions, votes),
@@ -112,6 +117,25 @@ export default function RealtimeMarket({
       )
       .subscribe()
 
+    const candidatesChannel = supabase
+      .channel('market-candidates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'candidates' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setCandidates((prev) => [...prev, payload.new as Candidate])
+          } else if (payload.eventType === 'UPDATE') {
+            setCandidates((prev) =>
+              prev.map((c) => (c.id === payload.new.id ? (payload.new as Candidate) : c))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setCandidates((prev) => prev.filter((c) => c.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
     const questionsChannel = supabase
       .channel('market-poll-questions')
       .on(
@@ -152,6 +176,7 @@ export default function RealtimeMarket({
 
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(candidatesChannel)
       supabase.removeChannel(questionsChannel)
       supabase.removeChannel(votesChannel)
     }

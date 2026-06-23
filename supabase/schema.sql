@@ -210,7 +210,10 @@ BEGIN
   IF (v_total_points + v_prediction_points) = 0 THEN
     v_probability := 50.0;
   ELSE
-    v_probability := ROUND(((v_candidate_points + v_prediction_points)::FLOAT / (v_total_points + v_prediction_points)) * 100, 2);
+    v_probability := ROUND(
+      (((v_candidate_points + v_prediction_points)::NUMERIC / (v_total_points + v_prediction_points)::NUMERIC) * 100),
+      2
+    )::FLOAT;
   END IF;
 
   -- Insert prediction
@@ -298,6 +301,19 @@ BEGIN
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE p.pubname = 'supabase_realtime'
       AND n.nspname = 'public'
+      AND c.relname = 'candidates'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.candidates;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE p.pubname = 'supabase_realtime'
+      AND n.nspname = 'public'
       AND c.relname = 'election_settings'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.election_settings;
@@ -359,7 +375,7 @@ WITH position_totals AS (
   GROUP BY position
 )
 UPDATE public.candidates c
-SET base_probability = ROUND(((c.seed_points::NUMERIC / pt.total_seed_points) * 100), 1)
+SET base_probability = ROUND(((c.seed_points::NUMERIC / pt.total_seed_points::NUMERIC) * 100), 1)::FLOAT
 FROM position_totals pt
 WHERE c.position = pt.position
   AND c.base_probability = 0

@@ -63,12 +63,6 @@ export default async function MarketPage() {
 
   return (
     <div className="py-4 sm:py-6 space-y-6">
-      <CommunityQuestions
-        initialQuestions={questions ?? []}
-        initialVotes={pollVotes ?? []}
-        candidates={candidates ?? []}
-        userId={authUser.id}
-      />
 
       <RealtimeMarket
         initialCandidates={candidates ?? []}

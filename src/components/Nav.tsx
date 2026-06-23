@@ -20,11 +20,7 @@ export default function Nav({ user }: NavProps) {
     router.refresh()
   }
 
-  const links = [
-    { href: '/', label: 'Market' },
-    { href: '/results', label: 'Results' },
-  ]
-
+  
   return (
     <nav className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -33,7 +29,7 @@ export default function Nav({ user }: NavProps) {
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-600 to-amber-500 text-xs font-black text-white">
               EP
             </span>
-            Election Predic
+            Election Predict
           </Link>
           <div className="hidden sm:flex items-center gap-1">
             {links.map((l) => (

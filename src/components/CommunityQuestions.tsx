@@ -183,7 +183,7 @@ export default function CommunityQuestions({
         <span className="text-xs text-gray-500">Live voter sentiment</span>
       </div>
 
-      {!hideForm && (
+      {/* {!hideForm && (
         <form onSubmit={handleCreateQuestion} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
         <p className="text-sm text-gray-400">Ask a question like: "Who had the best speech?"</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -214,7 +214,7 @@ export default function CommunityQuestions({
           {creating ? 'Adding...' : 'Add Question'}
         </button>
       </form>
-      )}
+      )*/}
 
       {error && (
         <p className="text-sm text-red-400 bg-red-950 border border-red-800 rounded-lg px-3 py-2">

@@ -52,13 +52,14 @@ export async function updateCandidate(
   name: string,
   party: string,
   position: string,
-  seedPoints: number
+  baseProbability: number
 ): Promise<{ error?: string }> {
   await assertAdmin()
   const db = getAdminClient()
+  const cleanProbability = Math.max(0, Math.min(100, baseProbability))
   const { error } = await db
     .from('candidates')
-    .update({ name, party, position, seed_points: seedPoints })
+    .update({ name, party, position, base_probability: cleanProbability })
     .eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/')
@@ -108,14 +109,17 @@ export async function addCandidate(
   const name = (formData.get('name') as string)?.trim()
   const party = (formData.get('party') as string)?.trim()
   const position = (formData.get('position') as string)?.trim() ?? ''
-  const seedPoints = parseInt(formData.get('seedPoints') as string) || 0
+  const baseProbability = Math.max(
+    0,
+    Math.min(100, parseFloat(formData.get('baseProbability') as string) || 0)
+  )
   const file = formData.get('photo') as File | null
 
   if (!name || !party) return { error: 'Name and party are required' }
 
   const { data, error } = await db
     .from('candidates')
-    .insert({ name, party, photo: '', position, seed_points: seedPoints })
+    .insert({ name, party, photo: '', position, base_probability: baseProbability, seed_points: 0 })
     .select()
     .single()
 
@@ -159,7 +163,7 @@ export async function bulkAddCandidates(
   const db = getAdminClient()
   const inserts = rows
     .filter((r) => r.name.trim() && r.party.trim())
-    .map((r) => ({ name: r.name.trim(), party: r.party.trim(), photo: '', position: (r.position ?? '').trim(), seed_points: 0 }))
+    .map((r) => ({ name: r.name.trim(), party: r.party.trim(), photo: '', position: (r.position ?? '').trim(), base_probability: 0, seed_points: 0 }))
 
   if (inserts.length === 0) return { error: 'No valid rows to import' }
 

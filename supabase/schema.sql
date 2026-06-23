@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.candidates (
   party TEXT NOT NULL DEFAULT '',
   photo TEXT NOT NULL DEFAULT '',
   position TEXT NOT NULL DEFAULT '',
+  base_probability FLOAT NOT NULL DEFAULT 0 CHECK (base_probability >= 0 AND base_probability <= 100),
   seed_points INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -345,6 +346,25 @@ ON CONFLICT DO NOTHING;
 
 ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS seed_points INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS position TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.candidates ADD COLUMN IF NOT EXISTS base_probability FLOAT NOT NULL DEFAULT 0;
+ALTER TABLE public.candidates
+  DROP CONSTRAINT IF EXISTS candidates_base_probability_check;
+ALTER TABLE public.candidates
+  ADD CONSTRAINT candidates_base_probability_check
+  CHECK (base_probability >= 0 AND base_probability <= 100);
+
+WITH position_totals AS (
+  SELECT position, SUM(seed_points) AS total_seed_points
+  FROM public.candidates
+  GROUP BY position
+)
+UPDATE public.candidates c
+SET base_probability = ROUND(((c.seed_points::NUMERIC / pt.total_seed_points) * 100), 1)
+FROM position_totals pt
+WHERE c.position = pt.position
+  AND c.base_probability = 0
+  AND c.seed_points > 0
+  AND pt.total_seed_points > 0;
 
 -- Supabase Storage bucket for candidate photos (public read)
 INSERT INTO storage.buckets (id, name, public)

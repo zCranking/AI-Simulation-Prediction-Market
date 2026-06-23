@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../lib/supabase/server'
 import RealtimeMarket from '../components/RealtimeMarket'
-import CommunityQuestions from '../components/CommunityQuestions'
 import type { Candidate, Prediction, ElectionSettings, PollQuestion, PollVote } from '../lib/types'
 
 const supabaseConfigured =
@@ -67,9 +66,10 @@ export default async function MarketPage() {
       <RealtimeMarket
         initialCandidates={candidates ?? []}
         initialPredictions={predictions ?? []}
+        initialQuestions={questions ?? []}
+        initialVotes={pollVotes ?? []}
         electionStatus={electionSettings?.status ?? 'active'}
       />
     </div>
   )
 }
-

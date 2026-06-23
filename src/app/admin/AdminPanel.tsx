@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { computeProbabilities } from '../../lib/market'
 import {
   updateCandidate,
@@ -20,14 +21,17 @@ interface Props {
   electionSettings: ElectionSettings | null
 }
 
-type EditState = { name: string; party: string; position: string; seedPoints: number }
+type EditState = { name: string; party: string; position: string; baseProbability: number }
 
 export default function AdminPanel({ initialCandidates, predictions, electionSettings }: Props) {
   const router = useRouter()
   const [candidates, setCandidates] = useState(initialCandidates)
   const [edits, setEdits] = useState<Record<string, EditState>>(
     Object.fromEntries(
-      initialCandidates.map((c) => [c.id, { name: c.name, party: c.party, position: c.position, seedPoints: c.seed_points }])
+      initialCandidates.map((c) => [
+        c.id,
+        { name: c.name, party: c.party, position: c.position, baseProbability: c.base_probability ?? 0 },
+      ])
     )
   )
   const [photoPreviews, setPhotoPreviews] = useState<Record<string, string>>({})
@@ -45,7 +49,7 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
   const [newName, setNewName] = useState('')
   const [newParty, setNewParty] = useState('')
   const [newPosition, setNewPosition] = useState('')
-  const [newSeedPoints, setNewSeedPoints] = useState(0)
+  const [newBaseProbability, setNewBaseProbability] = useState(0)
   const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null)
   const [newPhotoPreview, setNewPhotoPreview] = useState('')
   const [addLoading, setAddLoading] = useState(false)
@@ -67,13 +71,15 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
     setSavingField((p) => ({ ...p, [id]: true }))
     setFieldErrors((p) => ({ ...p, [id]: '' }))
     const e = edits[id]
-    const result = await updateCandidate(id, e.name, e.party, e.position, e.seedPoints)
+    const result = await updateCandidate(id, e.name, e.party, e.position, e.baseProbability)
     if (result.error) {
       setFieldErrors((p) => ({ ...p, [id]: result.error! }))
     } else {
       setCandidates((prev) =>
         prev.map((c) =>
-          c.id === id ? { ...c, name: e.name, party: e.party, position: e.position, seed_points: e.seedPoints } : c
+          c.id === id
+            ? { ...c, name: e.name, party: e.party, position: e.position, base_probability: e.baseProbability }
+            : c
         )
       )
     }
@@ -117,7 +123,7 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
     fd.append('name', newName)
     fd.append('party', newParty)
     fd.append('position', newPosition)
-    fd.append('seedPoints', String(newSeedPoints))
+    fd.append('baseProbability', String(newBaseProbability))
     if (newPhotoFile) fd.append('photo', newPhotoFile)
 
     const result = await addCandidate(fd)
@@ -128,12 +134,12 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
       setCandidates((prev) => [...prev, c])
       setEdits((prev) => ({
         ...prev,
-        [c.id]: { name: c.name, party: c.party, position: c.position, seedPoints: c.seed_points },
+        [c.id]: { name: c.name, party: c.party, position: c.position, baseProbability: c.base_probability ?? 0 },
       }))
       setNewName('')
       setNewParty('')
       setNewPosition('')
-      setNewSeedPoints(0)
+      setNewBaseProbability(0)
       setNewPhotoFile(null)
       setNewPhotoPreview('')
     }
@@ -185,12 +191,12 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
           <p className="text-gray-400 text-sm mt-1">Manage candidates, photos, and election settings</p>
         </div>
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href="/"
             className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
           >
             ← Market
-          </a>
+          </Link>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
@@ -213,7 +219,12 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
 
         <div className="space-y-4">
           {candidates.map((c) => {
-            const edit = edits[c.id] ?? { name: c.name, party: c.party, seedPoints: c.seed_points }
+            const edit = edits[c.id] ?? {
+              name: c.name,
+              party: c.party,
+              position: c.position,
+              baseProbability: c.base_probability ?? 0,
+            }
             const photoSrc = photoPreviews[c.id] || c.photo
             const prob = probMap[c.id]
 
@@ -279,7 +290,7 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
                     </div>
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">
-                        Base weight
+                        Base percentage
                         {prob !== undefined && (
                           <span className="ml-1 text-indigo-400">→ {prob.toFixed(1)}%</span>
                         )}
@@ -287,14 +298,16 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
                       <input
                         type="number"
                         min={0}
-                        value={edit.seedPoints}
+                        max={100}
+                        step={0.1}
+                        value={edit.baseProbability}
                         onChange={(e) =>
-                          updateEdit(c.id, 'seedPoints', parseInt(e.target.value) || 0)
+                          updateEdit(c.id, 'baseProbability', parseFloat(e.target.value) || 0)
                         }
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="0"
                       />
-                      <p className="text-xs text-gray-600 mt-0.5">Higher = higher starting %</p>
+                      <p className="text-xs text-gray-600 mt-0.5">Saved directly as a percent</p>
                     </div>
                   </div>
                 </div>
@@ -379,12 +392,14 @@ export default function AdminPanel({ initialCandidates, predictions, electionSet
               </datalist>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Base weight</label>
+              <label className="block text-xs text-gray-400 mb-1">Base percentage</label>
               <input
                 type="number"
                 min={0}
-                value={newSeedPoints}
-                onChange={(e) => setNewSeedPoints(parseInt(e.target.value) || 0)}
+                max={100}
+                step={0.1}
+                value={newBaseProbability}
+                onChange={(e) => setNewBaseProbability(parseFloat(e.target.value) || 0)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>

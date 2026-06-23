@@ -5,11 +5,19 @@ import Link from 'next/link'
 import { createClient } from '../lib/supabase/client'
 import { computeProbabilities } from '../lib/market'
 import ProbabilityBar from './ProbabilityBar'
-import type { Candidate, Prediction, CandidateWithProbability } from '../lib/types'
+import type {
+  Candidate,
+  Prediction,
+  CandidateWithProbability,
+  PollQuestion,
+  PollVote,
+} from '../lib/types'
 
 interface Props {
   initialCandidates: Candidate[]
   initialPredictions: Pick<Prediction, 'candidate_id' | 'points_allocated'>[]
+  initialQuestions: PollQuestion[]
+  initialVotes: PollVote[]
   electionStatus: 'active' | 'resolved'
 }
 
@@ -35,11 +43,15 @@ const POSITION_ORDER = [
 export default function RealtimeMarket({
   initialCandidates,
   initialPredictions,
+  initialQuestions,
+  initialVotes,
   electionStatus,
 }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [predictions, setPredictions] = useState(initialPredictions)
+  const [questions, setQuestions] = useState(initialQuestions)
+  const [votes, setVotes] = useState(initialVotes)
   const [candidates] = useState(initialCandidates)
 
   const positions = useMemo(() => {
@@ -52,8 +64,8 @@ export default function RealtimeMarket({
   const [activePosition, setActivePosition] = useState<string>(positions[0] ?? '')
 
   const withProb: CandidateWithProbability[] = useMemo(
-    () => computeProbabilities(candidates, predictions),
-    [candidates, predictions]
+    () => computeProbabilities(candidates, predictions, questions, votes),
+    [candidates, predictions, questions, votes]
   )
 
   const visibleCandidates = useMemo(
@@ -100,10 +112,50 @@ export default function RealtimeMarket({
       )
       .subscribe()
 
+    const questionsChannel = supabase
+      .channel('market-poll-questions')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'poll_questions' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setQuestions((prev) => [payload.new as PollQuestion, ...prev])
+          } else if (payload.eventType === 'UPDATE') {
+            setQuestions((prev) =>
+              prev.map((q) => (q.id === payload.new.id ? (payload.new as PollQuestion) : q))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setQuestions((prev) => prev.filter((q) => q.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    const votesChannel = supabase
+      .channel('market-poll-votes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'poll_votes' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setVotes((prev) => [payload.new as PollVote, ...prev])
+          } else if (payload.eventType === 'UPDATE') {
+            setVotes((prev) =>
+              prev.map((v) => (v.id === payload.new.id ? (payload.new as PollVote) : v))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setVotes((prev) => prev.filter((v) => v.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(questionsChannel)
+      supabase.removeChannel(votesChannel)
     }
-  }, [electionStatus])
+  }, [electionStatus, supabase])
 
   const totalPoints = predictions.reduce((sum, p) => sum + p.points_allocated, 0)
 
@@ -211,7 +263,7 @@ export default function RealtimeMarket({
       </div>
 
       <p className="text-xs text-gray-500 text-center">
-        Chances update live as predictions are placed.
+        Chances update live as predictions are placed and community questions are answered.
       </p>
     </div>
   )

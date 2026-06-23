@@ -33,6 +33,7 @@ export interface Database {
           party: string
           photo: string
           position: string
+          base_probability: number
           seed_points: number
           created_at: string
         }
@@ -42,6 +43,7 @@ export interface Database {
           party: string
           photo: string
           position?: string
+          base_probability?: number
           seed_points?: number
           created_at?: string
         }
@@ -51,6 +53,7 @@ export interface Database {
           party?: string
           photo?: string
           position?: string
+          base_probability?: number
           seed_points?: number
           created_at?: string
         }

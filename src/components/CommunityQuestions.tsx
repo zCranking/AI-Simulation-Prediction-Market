@@ -260,7 +260,14 @@ export default function CommunityQuestions({
                           className="w-full h-24 object-cover rounded-lg mb-2"
                         />
                       )}
-                      <p className="text-sm text-white truncate font-medium">{c.name}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm text-white truncate font-medium">{c.name}</p>
+                        {c.party && (
+                          <span className="shrink-0 text-[10px] text-gray-300 bg-gray-700 border border-gray-600 rounded px-1.5 py-0.5">
+                            {c.party}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400">{count} votes • {pct}%</p>
                     </button>
                   )

@@ -62,7 +62,7 @@ export default function OnboardPage() {
 
   async function handleVoteComplete() {
     // FIX: Changed from 'if (userId) return' to allow logged in users to progress
-    if (!userId) return
+    if (userId) return
     setSubmitting(true)
 
     try {

@@ -15,64 +15,74 @@ export default function OnboardPage() {
   const [votes, setVotes] = useState<PollVote[]>([])
   const [hasVoted, setHasVoted] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     async function checkUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/login')
+          return
+        }
+        setUserId(user.id)
 
-      if (!user) {
-        router.push('/login')
-        return
+        // Fetch user data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: userData } = await (supabase
+          .from('users') as any)
+          .select('name, setup_completed')
+          .eq('id', user.id)
+          .single()
+
+        if (userData?.setup_completed) {
+          router.push('/')
+          return
+        }
+        setUserName(userData?.name || '')
+
+        // Fetch candidates, questions, and votes
+        const [candidatesRes, questionsRes, votesRes] = await Promise.all([
+          supabase.from('candidates').select('*'),
+          supabase.from('poll_questions').select('*').eq('status', 'active').order('created_at', { ascending: false }),
+          supabase.from('poll_votes').select('*'),
+        ])
+
+        setCandidates(candidatesRes.data || [])
+        setQuestions(questionsRes.data || [])
+        setVotes(votesRes.data || [])
+      } catch (err) {
+        console.error('Error fetching onboarding data:', err)
+      } finally {
+        setLoading(false)
       }
-
-      setUserId(user.id)
-
-      // Fetch user data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: userData } = await (supabase
-        .from('users') as any)
-        .select('name, setup_completed')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.setup_completed) {
-        router.push('/')
-        return
-      }
-
-      setUserName(userData?.name || '')
-
-      // Fetch candidates and questions
-      const [candidatesRes, questionsRes, votesRes] = await Promise.all([
-        supabase.from('candidates').select('*'),
-        supabase.from('poll_questions').select('*').eq('status', 'active').order('created_at', { ascending: false }),
-        supabase.from('poll_votes').select('*'),
-      ])
-
-      setCandidates(candidatesRes.data || [])
-      setQuestions(questionsRes.data || [])
-      setVotes(votesRes.data || [])
-      setLoading(false)
     }
-
     checkUser()
   }, [supabase, router])
 
   async function handleVoteComplete() {
+    // FIX: Changed from 'if (userId) return' to allow logged in users to progress
     if (!userId) return
+    setSubmitting(true)
 
-    // Mark setup as complete
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase
-      .from('users') as any)
-      .update({ setup_completed: true })
-      .eq('id', userId)
+    try {
+      // Mark setup as complete
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase
+        .from('users') as any)
+        .update({ setup_completed: true })
+        .eq('id', userId)
 
-    if (!error) {
-      router.push('/')
-      router.refresh()
+      if (!error) {
+        router.push('/')
+        router.refresh()
+      } else {
+        console.error('Failed to complete onboarding database update:', error)
+        setSubmitting(false)
+      }
+    } catch (err) {
+      console.error('Exception occurred during onboarding completion:', err)
+      setSubmitting(false)
     }
   }
 
@@ -81,6 +91,8 @@ export default function OnboardPage() {
     if (userId && votes.length > 0) {
       const userHasVoted = votes.some((v) => v.user_id === userId)
       setHasVoted(userHasVoted)
+    } else {
+      setHasVoted(false)
     }
   }, [votes, userId])
 
@@ -119,10 +131,7 @@ export default function OnboardPage() {
                 .map((q) => {
                   const raceCandidates = candidates.filter((c) => c.position === position)
                   const totalVotes = votes.filter((v) => v.question_id === q.id).length
-                  const userVotedForQuestion = votes.some(
-                    (v) => v.question_id === q.id && v.user_id === userId
-                  )
-
+                  
                   return (
                     <article key={q.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
                       <div className="mb-4">
@@ -131,54 +140,56 @@ export default function OnboardPage() {
                           {totalVotes} vote{totalVotes === 1 ? '' : 's'}
                         </div>
                       </div>
-
+                      
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {raceCandidates.map((c) => {
                           const count = votes.filter(
-                            (v) =>
-                              v.question_id === q.id &&
-                              v.candidate_id === c.id
+                            (v) => v.question_id === q.id && v.candidate_id === c.id
                           ).length
                           const pct = totalVotes === 0 ? 0 : Math.round((count / totalVotes) * 100)
                           const selected = votes.some(
-                            (v) =>
-                              v.question_id === q.id &&
-                              v.user_id === userId &&
-                              v.candidate_id === c.id
+                            (v) => v.question_id === q.id && v.user_id === userId && v.candidate_id === c.id
                           )
-
+                          
                           return (
                             <button
                               key={c.id}
                               onClick={async () => {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const { error } = await (supabase
-                                  .from('poll_votes') as any)
-                                  .upsert(
-                                    {
-                                      question_id: q.id,
-                                      user_id: userId,
-                                      candidate_id: c.id,
-                                    },
-                                    { onConflict: 'question_id,user_id' }
-                                  )
-
-                                if (!error) {
-                                  setVotes((prev) => {
-                                    const withoutMine = prev.filter(
-                                      (v) => !(v.question_id === q.id && v.user_id === userId)
-                                    )
-                                    return [
-                                      ...withoutMine,
+                                if (!userId) return
+                                try {
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  const { error } = await (supabase
+                                    .from('poll_votes') as any)
+                                    .upsert(
                                       {
-                                        id: crypto.randomUUID(),
                                         question_id: q.id,
-                                        user_id: userId as string,
+                                        user_id: userId,
                                         candidate_id: c.id,
-                                        created_at: new Date().toISOString(),
                                       },
-                                    ]
-                                  })
+                                      { onConflict: 'question_id,user_id' }
+                                    )
+                                    
+                                  if (!error) {
+                                    setVotes((prev) => {
+                                      const withoutMine = prev.filter(
+                                        (v) => !(v.question_id === q.id && v.user_id === userId)
+                                      )
+                                      return [
+                                        ...withoutMine,
+                                        {
+                                          id: crypto.randomUUID(),
+                                          question_id: q.id,
+                                          user_id: userId,
+                                          candidate_id: c.id,
+                                          created_at: new Date().toISOString(),
+                                        },
+                                      ]
+                                    })
+                                  } else {
+                                    console.error('Error submitting vote:', error)
+                                  }
+                                } catch (err) {
+                                  console.error('Network failure casting vote:', err)
                                 }
                               }}
                               className={`flex flex-col items-center rounded-xl border px-2 py-3 transition-colors text-center ${
@@ -213,10 +224,10 @@ export default function OnboardPage() {
       <div className="flex gap-3 sticky bottom-0 py-4 bg-gradient-to-t from-gray-950 to-transparent">
         <button
           onClick={handleVoteComplete}
-          disabled={!hasVoted}
+          disabled={!hasVoted || submitting}
           className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors"
         >
-          Continue to Market
+          {submitting ? 'Updating Profile...' : 'Continue to Market'}
         </button>
       </div>
     </div>

@@ -95,6 +95,55 @@ export interface Database {
           winner_candidate_id?: string | null
         }
       }
+      poll_questions: {
+        Row: {
+          id: string
+          title: string
+          position: string
+          status: 'active' | 'closed'
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          position?: string
+          status?: 'active' | 'closed'
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          position?: string
+          status?: 'active' | 'closed'
+          created_by?: string | null
+          created_at?: string
+        }
+      }
+      poll_votes: {
+        Row: {
+          id: string
+          question_id: string
+          user_id: string
+          candidate_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          question_id: string
+          user_id: string
+          candidate_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          question_id?: string
+          user_id?: string
+          candidate_id?: string
+          created_at?: string
+        }
+      }
     }
     Functions: {
       place_prediction: {
@@ -115,6 +164,8 @@ export type User = Database['public']['Tables']['users']['Row']
 export type Candidate = Database['public']['Tables']['candidates']['Row']
 export type Prediction = Database['public']['Tables']['predictions']['Row']
 export type ElectionSettings = Database['public']['Tables']['election_settings']['Row']
+export type PollQuestion = Database['public']['Tables']['poll_questions']['Row']
+export type PollVote = Database['public']['Tables']['poll_votes']['Row']
 
 export interface CandidateWithProbability extends Candidate {
   total_points: number

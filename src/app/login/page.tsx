@@ -43,8 +43,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">ElectionMarket</h1>
-          <p className="text-gray-400 mt-2">Enter your name to join — you get 1,000 points to predict with</p>
+          <h1 className="text-3xl font-bold text-white">Election Predic</h1>
+          <p className="text-gray-400 mt-2">Enter your name to join and start predicting</p>
         </div>
 
         <form

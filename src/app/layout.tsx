@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ElectionMarket — Election Prediction Platform",
-  description: "Predict election outcomes, track your accuracy, and climb the leaderboard.",
+  title: "Election Predic — Election Prediction Platform",
+  description: "Track election chances, vote on campaign questions, and follow live sentiment.",
 };
 
 export default async function RootLayout({

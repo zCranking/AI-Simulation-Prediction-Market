@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../lib/supabase/server'
 import RealtimeMarket from '../components/RealtimeMarket'
-import type { Candidate, Prediction, ElectionSettings } from '../lib/types'
+import CommunityQuestions from '../components/CommunityQuestions'
+import type { Candidate, Prediction, ElectionSettings, PollQuestion, PollVote } from '../lib/types'
 
 const supabaseConfigured =
   (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').startsWith('http')
@@ -14,7 +15,7 @@ export default async function MarketPage() {
         <p className="text-gray-400 mb-4 max-w-md">
           Add your Supabase credentials to{' '}
           <code className="text-indigo-400 bg-gray-800 px-1.5 py-0.5 rounded">.env.local</code>{' '}
-          to start using ElectionMarket.
+          to start using Election Predic.
         </p>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-left text-sm font-mono text-gray-300 max-w-md w-full">
           <p>NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co</p>
@@ -39,21 +40,32 @@ export default async function MarketPage() {
     redirect('/login')
   }
 
-  const [r1, r2, r3] = await Promise.all([
+  const [r1, r2, r3, r4, r5] = await Promise.all([
     supabase.from('candidates').select('*').order('created_at'),
     supabase.from('predictions').select('candidate_id, points_allocated'),
     supabase.from('election_settings').select('*').eq('id', 1).single(),
+    supabase.from('poll_questions').select('*').eq('status', 'active').order('created_at', { ascending: false }),
+    supabase.from('poll_votes').select('*'),
   ])
   const candidates = r1.data as Candidate[] | null
   const predictions = r2.data as Pick<Prediction, 'candidate_id' | 'points_allocated'>[] | null
   const electionSettings = r3.data as ElectionSettings | null
+  const questions = r4.data as PollQuestion[] | null
+  const pollVotes = r5.data as PollVote[] | null
 
   return (
-    <div className="py-6">
+    <div className="py-4 sm:py-6 space-y-6">
       <RealtimeMarket
         initialCandidates={candidates ?? []}
         initialPredictions={predictions ?? []}
         electionStatus={electionSettings?.status ?? 'active'}
+      />
+
+      <CommunityQuestions
+        initialQuestions={questions ?? []}
+        initialVotes={pollVotes ?? []}
+        candidates={candidates ?? []}
+        userId={authUser.id}
       />
     </div>
   )

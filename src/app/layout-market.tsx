@@ -27,7 +27,7 @@ export default async function MarketLayout({ children }: { children: React.React
   return (
     <div className="flex flex-col min-h-screen">
       <Nav user={profile as User} />
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">{children}</main>
+      <main className="flex-1 max-w-6xl mx-auto w-full px-3 sm:px-4 py-5 sm:py-8">{children}</main>
     </div>
   )
 }

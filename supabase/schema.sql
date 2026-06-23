@@ -32,6 +32,25 @@ CREATE TABLE IF NOT EXISTS public.predictions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 3b. COMMUNITY QUESTIONS
+CREATE TABLE IF NOT EXISTS public.poll_questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  position TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+  created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.poll_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  question_id UUID NOT NULL REFERENCES public.poll_questions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  candidate_id UUID NOT NULL REFERENCES public.candidates(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (question_id, user_id)
+);
+
 -- 4. ELECTION SETTINGS (single-row control table)
 CREATE TABLE IF NOT EXISTS public.election_settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
@@ -47,6 +66,8 @@ ON CONFLICT (id) DO NOTHING;
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_predictions_candidate ON public.predictions(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_user ON public.predictions(user_id);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_question ON public.poll_votes(question_id);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_candidate ON public.poll_votes(candidate_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -56,6 +77,8 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.candidates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.election_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.poll_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.poll_votes ENABLE ROW LEVEL SECURITY;
 
 -- USERS: anyone authenticated can read (for leaderboard); only own row for sensitive data
 DROP POLICY IF EXISTS "users_read_all" ON public.users;
@@ -83,6 +106,32 @@ CREATE POLICY "predictions_read_own" ON public.predictions
 DROP POLICY IF EXISTS "election_settings_read" ON public.election_settings;
 CREATE POLICY "election_settings_read" ON public.election_settings
   FOR SELECT TO anon, authenticated USING (true);
+
+-- POLL QUESTIONS: authenticated users can read and create
+DROP POLICY IF EXISTS "poll_questions_read_all" ON public.poll_questions;
+CREATE POLICY "poll_questions_read_all" ON public.poll_questions
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "poll_questions_insert_own" ON public.poll_questions;
+CREATE POLICY "poll_questions_insert_own" ON public.poll_questions
+  FOR INSERT TO authenticated
+  WITH CHECK ((SELECT auth.uid()) = created_by);
+
+-- POLL VOTES: authenticated users can read all and upsert their own vote
+DROP POLICY IF EXISTS "poll_votes_read_all" ON public.poll_votes;
+CREATE POLICY "poll_votes_read_all" ON public.poll_votes
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "poll_votes_insert_own" ON public.poll_votes;
+CREATE POLICY "poll_votes_insert_own" ON public.poll_votes
+  FOR INSERT TO authenticated
+  WITH CHECK ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS "poll_votes_update_own" ON public.poll_votes;
+CREATE POLICY "poll_votes_update_own" ON public.poll_votes
+  FOR UPDATE TO authenticated
+  USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK ((SELECT auth.uid()) = user_id);
 
 -- ============================================================
 -- AUTO-CREATE USER PROFILE ON SIGNUP
@@ -409,3 +458,22 @@ INSERT INTO public.candidates (name, party, photo, seed_points, position) VALUES
   ('Elena Zhang',             'Nonpartisan', '', 0, 'Supreme Court Justice'),
   ('Atticus Zweig',           'Nonpartisan', '', 0, 'Supreme Court Justice')
 ON CONFLICT DO NOTHING;
+
+-- Community starter questions
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who had the best speech?', 'Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who had the best speech?' AND position = 'Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has the best posters?', 'Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has the best posters?' AND position = 'Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has done the best campaigning?', 'Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has done the best campaigning?' AND position = 'Governor'
+);

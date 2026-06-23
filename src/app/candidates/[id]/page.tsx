@@ -61,7 +61,7 @@ export default async function CandidatePage({ params }: Props) {
     <div className="max-w-2xl mx-auto py-6 space-y-6">
       {/* Candidate hero */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-indigo-900 to-purple-900" />
+        <div className="h-24 bg-linear-to-r from-indigo-900 to-purple-900" />
         <div className="px-6 pb-6">
           <div className="-mt-12 flex items-end gap-4 mb-4">
             <img

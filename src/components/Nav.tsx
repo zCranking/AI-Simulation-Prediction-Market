@@ -29,8 +29,11 @@ export default function Nav({ user }: NavProps) {
     <nav className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-xl font-bold text-white tracking-tight">
-            ElectionMarket
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-white tracking-tight">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-600 to-amber-500 text-xs font-black text-white">
+              EP
+            </span>
+            Election Predic
           </Link>
           <div className="hidden sm:flex items-center gap-1">
             {links.map((l) => (

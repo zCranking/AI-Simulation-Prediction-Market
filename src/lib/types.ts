@@ -8,18 +8,21 @@ export interface Database {
           id: string
           name: string
           points_remaining: number
+          setup_completed: boolean
           created_at: string
         }
         Insert: {
           id: string
           name: string
           points_remaining?: number
+          setup_completed?: boolean
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
           points_remaining?: number
+          setup_completed?: boolean
           created_at?: string
         }
       }

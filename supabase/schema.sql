@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   points_remaining INTEGER NOT NULL DEFAULT 1000,
+  setup_completed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -300,6 +301,32 @@ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.election_settings;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE p.pubname = 'supabase_realtime'
+      AND n.nspname = 'public'
+      AND c.relname = 'poll_questions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.poll_questions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE p.pubname = 'supabase_realtime'
+      AND n.nspname = 'public'
+      AND c.relname = 'poll_votes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.poll_votes;
+  END IF;
 END $$;
 
 -- ============================================================
@@ -476,4 +503,58 @@ INSERT INTO public.poll_questions (title, position, status, created_by)
 SELECT 'Who has done the best campaigning?', 'Governor', 'active', NULL
 WHERE NOT EXISTS (
   SELECT 1 FROM public.poll_questions WHERE title = 'Who has done the best campaigning?' AND position = 'Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who had the best speech?', 'Lt. Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who had the best speech?' AND position = 'Lt. Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has the best posters?', 'Lt. Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has the best posters?' AND position = 'Lt. Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has done the best campaigning?', 'Lt. Governor', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has done the best campaigning?' AND position = 'Lt. Governor'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who had the best speech?', 'Secretary of State', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who had the best speech?' AND position = 'Secretary of State'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has the best posters?', 'Secretary of State', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has the best posters?' AND position = 'Secretary of State'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has done the best campaigning?', 'Secretary of State', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has done the best campaigning?' AND position = 'Secretary of State'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who had the best speech?', 'State Treasurer', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who had the best speech?' AND position = 'State Treasurer'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has the best posters?', 'State Treasurer', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has the best posters?' AND position = 'State Treasurer'
+);
+
+INSERT INTO public.poll_questions (title, position, status, created_by)
+SELECT 'Who has done the best campaigning?', 'State Treasurer', 'active', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.poll_questions WHERE title = 'Who has done the best campaigning?' AND position = 'State Treasurer'
 );

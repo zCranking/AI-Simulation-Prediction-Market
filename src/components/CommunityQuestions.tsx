@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { createClient } from '../lib/supabase/client'
 import type { Candidate, PollQuestion, PollVote } from '../lib/types'
 
@@ -26,6 +26,60 @@ export default function CommunityQuestions({
   const [newQuestion, setNewQuestion] = useState('')
   const [newPosition, setNewPosition] = useState('')
   const [creating, setCreating] = useState(false)
+
+  // Set up real-time subscriptions
+  useEffect(() => {
+    const questionsSubscription = supabase
+      .channel('poll_questions_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'poll_questions',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setQuestions((prev) => [payload.new as PollQuestion, ...prev])
+          } else if (payload.eventType === 'UPDATE') {
+            setQuestions((prev) =>
+              prev.map((q) => (q.id === payload.new.id ? (payload.new as PollQuestion) : q))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setQuestions((prev) => prev.filter((q) => q.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    const votesSubscription = supabase
+      .channel('poll_votes_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'poll_votes',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setVotes((prev) => [payload.new as PollVote, ...prev])
+          } else if (payload.eventType === 'UPDATE') {
+            setVotes((prev) =>
+              prev.map((v) => (v.id === payload.new.id ? (payload.new as PollVote) : v))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setVotes((prev) => prev.filter((v) => v.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      questionsSubscription.unsubscribe()
+      votesSubscription.unsubscribe()
+    }
+  }, [supabase])
 
   const positions = useMemo(
     () => [...new Set(candidates.map((c) => c.position).filter(Boolean))],

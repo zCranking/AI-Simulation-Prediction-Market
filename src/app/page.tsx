@@ -40,32 +40,40 @@ export default async function MarketPage() {
     redirect('/login')
   }
 
-  const [r1, r2, r3, r4, r5] = await Promise.all([
+  const [r1, r2, r3, r4, r5, r6] = await Promise.all([
     supabase.from('candidates').select('*').order('created_at'),
     supabase.from('predictions').select('candidate_id, points_allocated'),
     supabase.from('election_settings').select('*').eq('id', 1).single(),
     supabase.from('poll_questions').select('*').eq('status', 'active').order('created_at', { ascending: false }),
     supabase.from('poll_votes').select('*'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from('users') as any).select('setup_completed').eq('id', authUser.id).single(),
   ])
   const candidates = r1.data as Candidate[] | null
   const predictions = r2.data as Pick<Prediction, 'candidate_id' | 'points_allocated'>[] | null
   const electionSettings = r3.data as ElectionSettings | null
   const questions = r4.data as PollQuestion[] | null
   const pollVotes = r5.data as PollVote[] | null
+  const userSetup = r6.data as { setup_completed: boolean } | null
+
+  // Redirect to onboard if setup not complete
+  if (!userSetup?.setup_completed) {
+    redirect('/onboard')
+  }
 
   return (
     <div className="py-4 sm:py-6 space-y-6">
-      <RealtimeMarket
-        initialCandidates={candidates ?? []}
-        initialPredictions={predictions ?? []}
-        electionStatus={electionSettings?.status ?? 'active'}
-      />
-
       <CommunityQuestions
         initialQuestions={questions ?? []}
         initialVotes={pollVotes ?? []}
         candidates={candidates ?? []}
         userId={authUser.id}
+      />
+
+      <RealtimeMarket
+        initialCandidates={candidates ?? []}
+        initialPredictions={predictions ?? []}
+        electionStatus={electionSettings?.status ?? 'active'}
       />
     </div>
   )

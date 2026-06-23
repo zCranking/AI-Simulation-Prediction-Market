@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '../../lib/supabase/client'
-import CommunityQuestions from '../../components/CommunityQuestions'
 import type { Candidate, PollQuestion, PollVote } from '../../lib/types'
 
 export default function OnboardPage() {
@@ -100,21 +99,116 @@ export default function OnboardPage() {
       <div className="space-y-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Welcome, {userName}!</h1>
-          <p className="text-gray-400 mt-1">Let's start with your predictions</p>
+          <p className="text-gray-400 mt-1">Help calibrate predictions with your input</p>
         </div>
         <div className="bg-blue-950/30 border border-blue-700/50 rounded-2xl p-4">
           <p className="text-sm text-blue-200">
-            <span className="font-semibold">First step:</span> Vote on community questions below to help calibrate your predictions. You need at least one vote to continue.
+            <span className="font-semibold">First step:</span> Vote on at least one community question for each position below. These votes help calibrate the prediction market.
           </p>
         </div>
       </div>
 
-      <CommunityQuestions
-        initialQuestions={questions}
-        initialVotes={votes}
-        candidates={candidates}
-        userId={userId || ''}
-      />
+      {/* Questions organized by position */}
+      <div className="space-y-8">
+        {['Governor', 'Lt. Governor', 'Secretary of State', 'State Treasurer'].map((position) => (
+          <section key={position} className="space-y-3">
+            <h2 className="text-lg font-semibold text-white">{position}</h2>
+            <div className="space-y-3">
+              {questions
+                .filter((q) => q.position === position)
+                .map((q) => {
+                  const raceCandidates = candidates.filter((c) => c.position === position)
+                  const totalVotes = votes.filter((v) => v.question_id === q.id).length
+                  const userVotedForQuestion = votes.some(
+                    (v) => v.question_id === q.id && v.user_id === userId
+                  )
+
+                  return (
+                    <article key={q.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                      <div className="mb-4">
+                        <p className="text-white font-medium">{q.title}</p>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {totalVotes} vote{totalVotes === 1 ? '' : 's'}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {raceCandidates.map((c) => {
+                          const count = votes.filter(
+                            (v) =>
+                              v.question_id === q.id &&
+                              v.candidate_id === c.id
+                          ).length
+                          const pct = totalVotes === 0 ? 0 : Math.round((count / totalVotes) * 100)
+                          const selected = votes.some(
+                            (v) =>
+                              v.question_id === q.id &&
+                              v.user_id === userId &&
+                              v.candidate_id === c.id
+                          )
+
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={async () => {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const { error } = await (supabase
+                                  .from('poll_votes') as any)
+                                  .upsert(
+                                    {
+                                      question_id: q.id,
+                                      user_id: userId,
+                                      candidate_id: c.id,
+                                    },
+                                    { onConflict: 'question_id,user_id' }
+                                  )
+
+                                if (!error) {
+                                  setVotes((prev) => {
+                                    const withoutMine = prev.filter(
+                                      (v) => !(v.question_id === q.id && v.user_id === userId)
+                                    )
+                                    return [
+                                      ...withoutMine,
+                                      {
+                                        id: crypto.randomUUID(),
+                                        question_id: q.id,
+                                        user_id: userId as string,
+                                        candidate_id: c.id,
+                                        created_at: new Date().toISOString(),
+                                      },
+                                    ]
+                                  })
+                                }
+                              }}
+                              className={`flex flex-col items-center rounded-xl border px-2 py-3 transition-colors text-center ${
+                                selected
+                                  ? 'border-indigo-500 bg-indigo-950/40'
+                                  : 'border-gray-700 bg-gray-800 hover:border-indigo-600'
+                              }`}
+                            >
+                              {c.photo && (
+                                <img
+                                  src={c.photo}
+                                  alt={c.name}
+                                  className="w-12 h-12 rounded-full object-cover mb-2 border border-gray-600"
+                                />
+                              )}
+                              <p className="text-xs text-white truncate font-medium max-w-full">
+                                {c.name.split(' ')[0]}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">{count} • {pct}%</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </article>
+                  )
+                })}
+            </div>
+          </section>
+        ))}
+      </div>
 
       <div className="flex gap-3 sticky bottom-0 py-4 bg-gradient-to-t from-gray-950 to-transparent">
         <button

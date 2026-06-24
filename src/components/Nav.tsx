@@ -5,6 +5,11 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '../lib/supabase/client'
 import type { User } from '../lib/types'
 
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/results', label: 'Results' },
+]
+
 interface NavProps {
   user: User
 }

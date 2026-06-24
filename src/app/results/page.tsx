@@ -137,11 +137,12 @@ export default async function ResultsPage() {
                               <ProbabilityBar probability={c.probability} party={c.party} />
                             </span>
                           </div>
-                          <div className="h-2 bg-gray-800 rounded-full mt-1.5 overflow-hidden">
+                          <div className="h-2 bg-gray-800 rounded-full mt-1.5 relative overflow-hidden">
                             <div
-                              className="h-full rounded-full transition-all duration-700"
+                              className="absolute top-0 h-full rounded-full transition-all duration-700"
                               style={{
-                                width: `${Math.max(c.probability, 0.5)}%`,
+                                width: `${Math.abs(c.spread)}%`,
+                                left: c.spread >= 0 ? '50%' : `${50 - Math.abs(c.spread)}%`,
                                 backgroundColor: partyColor(c.party),
                                 opacity: isResolved && !isWinner ? 0.4 : 1,
                               }}

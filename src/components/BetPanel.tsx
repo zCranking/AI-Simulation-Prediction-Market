@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   calculateShares,
   calculatePayout,
+  priceToProbability,
 } from '../lib/market'
 
 export default function BetPanel({
@@ -20,7 +21,7 @@ export default function BetPanel({
   const [winnerChance, setWinnerChance] = useState(true)
 
   const shares = calculateShares(dollars, price)
-  const payout = calculatePayout(shares, winnerChance)
+  const payout = calculatePayout(shares, priceToProbability(price), winnerChance)
 
   return (
     <div className="p-4 bg-gray-900 rounded-xl border border-gray-800 space-y-3">

@@ -13,7 +13,6 @@ export default function OnboardPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [questions, setQuestions] = useState<PollQuestion[]>([])
   const [votes, setVotes] = useState<PollVote[]>([])
-  const [hasVoted, setHasVoted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
@@ -28,9 +27,8 @@ export default function OnboardPage() {
         setUserId(user.id)
 
         // Fetch user data
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: userData } = await (supabase
-          .from('users') as any)
+        const { data: userData } = await supabase
+          .from('users')
           .select('name, setup_completed')
           .eq('id', user.id)
           .single()
@@ -67,9 +65,8 @@ export default function OnboardPage() {
 
     try {
       // Mark setup as complete
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase
-        .from('users') as any)
+      const { error } = await supabase
+        .from('users')
         .update({ setup_completed: true })
         .eq('id', userId)
 
@@ -87,14 +84,7 @@ export default function OnboardPage() {
   }
 
   // Monitor votes to enable continue button
-  useEffect(() => {
-    if (userId && votes.length > 0) {
-      const userHasVoted = votes.some((v) => v.user_id === userId)
-      setHasVoted(userHasVoted)
-    } else {
-      setHasVoted(false)
-    }
-  }, [votes, userId])
+  const hasVoted = Boolean(userId) && votes.some((v) => v.user_id === userId)
 
   if (loading) {
     return (
@@ -157,9 +147,8 @@ export default function OnboardPage() {
                               onClick={async () => {
                                 if (!userId) return
                                 try {
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  const { error } = await (supabase
-                                    .from('poll_votes') as any)
+                                  const { error } = await supabase
+                                    .from('poll_votes')
                                     .upsert(
                                       {
                                         question_id: q.id,

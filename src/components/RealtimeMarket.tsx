@@ -61,12 +61,8 @@ export default function RealtimeMarket({
     )
   }, [candidates])
 
-  const [activePosition, setActivePosition] = useState<string>(positions[0] ?? '')
-
-  useEffect(() => {
-    if (!activePosition || positions.includes(activePosition)) return
-    setActivePosition(positions[0] ?? '')
-  }, [activePosition, positions])
+  const [selectedPosition, setActivePosition] = useState<string>(positions[0] ?? '')
+  const activePosition = positions.includes(selectedPosition) ? selectedPosition : positions[0] ?? ''
 
   const withProb: CandidateWithProbability[] = useMemo(
     () => computeProbabilities(candidates, predictions, questions, votes),

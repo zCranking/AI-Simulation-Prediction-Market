@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase/server'
 import { computeProbabilities } from '../../lib/market'
 import type { Candidate, Prediction, ElectionSettings } from '../../lib/types'
+import ProbabilityBar from '../../components/ProbabilityBar'
+
 
 export const revalidate = 30
 
@@ -132,7 +134,7 @@ export default async function ResultsPage() {
                               )}
                             </div>
                             <span className="font-bold text-white tabular-nums text-sm shrink-0">
-                              {c.probability.toFixed(1)}%
+                              <ProbabilityBar probability={c.probability} party={c.party} />
                             </span>
                           </div>
                           <div className="h-2 bg-gray-800 rounded-full mt-1.5 overflow-hidden">

@@ -244,7 +244,7 @@ export default function RealtimeMarket({
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {visibleCandidates
+      {visibleCandidates
           .sort((a, b) => b.probability - a.probability)
           .map((c) => (
             <Link

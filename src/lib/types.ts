@@ -175,7 +175,24 @@ export type PollVote = Database['public']['Tables']['poll_votes']['Row']
 
 export interface CandidateWithProbability extends Candidate {
   total_points: number
+
+  /**
+   * Final probability after market + community adjustments
+   * Example: 63.4
+   */
   probability: number
+
+  /**
+   * Distance from a neutral 50/50 market.
+   *
+   * Examples:
+   * 50% => 0
+   * 60% => +10
+   * 75% => +25
+   * 40% => -10
+   * 25% => -25
+   */
+  spread: number
 }
 
 export interface LeaderboardEntry {

@@ -152,8 +152,8 @@ export default function CommunityQuestions({
     setCreating(true)
     setError('')
 
-    const { data, error } = await supabase
-      .from('poll_questions')
+    const { data, error } = await (supabase
+      .from('poll_questions') as any) // eslint-disable-line @typescript-eslint/no-explicit-any
       .insert({
         title: newQuestion.trim(),
         position: newPosition,

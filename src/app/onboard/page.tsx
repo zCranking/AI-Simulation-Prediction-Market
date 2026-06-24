@@ -27,8 +27,8 @@ export default function OnboardPage() {
         setUserId(user.id)
 
         // Fetch user data
-        const { data: userData } = await supabase
-          .from('users')
+        const { data: userData } = await (supabase
+          .from('users') as any) // eslint-disable-line @typescript-eslint/no-explicit-any
           .select('name, setup_completed')
           .eq('id', user.id)
           .single()
@@ -65,8 +65,8 @@ export default function OnboardPage() {
 
     try {
       // Mark setup as complete
-      const { error } = await supabase
-        .from('users')
+      const { error } = await (supabase
+        .from('users') as any) // eslint-disable-line @typescript-eslint/no-explicit-any
         .update({ setup_completed: true })
         .eq('id', userId)
 
@@ -147,8 +147,8 @@ export default function OnboardPage() {
                               onClick={async () => {
                                 if (!userId) return
                                 try {
-                                  const { error } = await supabase
-                                    .from('poll_votes')
+                                  const { error } = await (supabase
+                                    .from('poll_votes') as any) // eslint-disable-line @typescript-eslint/no-explicit-any
                                     .upsert(
                                       {
                                         question_id: q.id,

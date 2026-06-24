@@ -3,10 +3,6 @@ import { createClient } from '../../lib/supabase/server'
 import { computeProbabilities } from '../../lib/market'
 import type { Candidate, Prediction, ElectionSettings } from '../../lib/types'
 import ProbabilityBar from '../../components/ProbabilityBar'
-import type {
-  Candidate,
-  Prediction
-} from '../../lib/types'
 
 
 export const revalidate = 30

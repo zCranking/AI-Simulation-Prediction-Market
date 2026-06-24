@@ -1,34 +1,35 @@
-'use client'
+import { partyColor } from '../lib/market'
 
-interface ProbabilityBarProps {
+export default function ProbabilityBar({
+  probability,
+  party,
+}: {
   probability: number
   party: string
-  animated?: boolean
-}
-
-function partyBarColor(party: string): string {
-  const p = party.toLowerCase()
-  if (p.includes('whig')) return 'bg-amber-500'
-  if (p.includes('federalist')) return 'bg-blue-500'
-  return 'bg-indigo-500'
-}
-
-export default function ProbabilityBar({ probability, party, animated = true }: ProbabilityBarProps) {
-  const pct = Math.round(probability * 10) / 10
+}) {
+  const spread = probability - 50
 
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-sm font-medium">
-        <span className="text-gray-400">Chance of winning</span>
-        <span className="text-white tabular-nums">{pct.toFixed(1)}%</span>
-      </div>
-      <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
+    <div className="w-full">
+      <div className="h-2 bg-gray-800 rounded-full relative overflow-hidden">
+
+        {/* center line */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-gray-600" />
+
+        {/* left/right bar */}
         <div
-          className={`h-full rounded-full ${partyBarColor(party)} ${animated ? 'transition-all duration-700 ease-out' : ''}`}
-          style={{ width: `${Math.max(pct, 0.5)}%` }}
+          className="absolute top-0 h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${Math.abs(spread)}%`,
+            left: spread >= 0 ? '50%' : `${50 - Math.abs(spread)}%`,
+            backgroundColor: partyColor(party),
+          }}
         />
+      </div>
+
+      <div className="text-xs text-gray-400 mt-1 text-right">
+        {probability.toFixed(1)}%
       </div>
     </div>
   )
 }
-

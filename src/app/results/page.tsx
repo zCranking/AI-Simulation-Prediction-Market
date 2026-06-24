@@ -1,9 +1,15 @@
-import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase/server'
 import { computeProbabilities } from '../../lib/market'
-import type { Candidate, Prediction, ElectionSettings } from '../../lib/types'
 import ProbabilityBar from '../../components/ProbabilityBar'
 
+import type {
+  Candidate,
+  Prediction,
+  ElectionSettings,
+  PollQuestion,
+  PollVote,
+  CandidateWithProbability,
+} from '../../lib/types'
 
 export const revalidate = 30
 
@@ -30,8 +36,7 @@ const POSITION_ORDER = [
 export default async function ResultsPage() {
   const supabase = await createClient()
 
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) redirect('/login')
+
 
   const [r1, r2, r3] = await Promise.all([
     supabase.from('candidates').select('*').order('created_at'),
@@ -46,7 +51,13 @@ export default async function ResultsPage() {
   const winnerCandidateId = electionSettings?.winner_candidate_id
   const totalPoints = (predictions ?? []).reduce((sum, p) => sum + p.points_allocated, 0)
 
-  const withProb = computeProbabilities(candidates ?? [], predictions ?? [])
+  const withProb: CandidateWithProbability[] =
+  computeProbabilities(
+    candidates ?? [],
+    predictions ?? [],
+    [],
+    []
+  )
 
   // Group by position in ballot order
   const allPositions = [...new Set((candidates ?? []).map((c) => c.position).filter(Boolean))]

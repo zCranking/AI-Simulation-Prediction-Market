@@ -1,6 +1,9 @@
 -- ============================================================
--- ELECTION PREDICTION MARKET — Supabase SQL Setup
--- Run this entire file in Supabase SQL Editor
+-- FROZEN LEGACY REFERENCE — DO NOT EDIT OR RE-RUN
+-- This was the original single-election schema, applied by hand
+-- via the SQL editor. The schema is now managed by versioned
+-- migrations in ./migrations/ (0001 reproduces this baseline).
+-- Re-running this file is destructive (it truncates predictions).
 -- ============================================================
 
 -- 1. USERS (extends Supabase Auth)

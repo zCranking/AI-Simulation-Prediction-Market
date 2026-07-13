@@ -1,4 +1,4 @@
-# Toss-Up — AI vs. Crowd Prediction Markets
+# Toss-Up — AI Simulation Prediction Market
 
 Built solo in one week as part of an AI-systems program focused on capitalizing on
 uncertainty — Toss-Up is a simulated, points-based prediction market (in the spirit of

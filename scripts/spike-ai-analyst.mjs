@@ -70,21 +70,28 @@ function extractJson(text) {
 }
 
 async function callVultr(prompt) {
-  const res = await fetch(`${VULTR_BASE}chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${VULTR_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: VULTR_MODEL,
-      max_tokens: 8192,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'user',
-          content: `${prompt}\n\nRespond with ONLY a JSON object, no other text, in exactly this shape:\n{"outcomes":[{"outcome_id":"<id exactly as given>","probability":<number 0-100>,"rationale":"<1-2 sentences>"}]}\nInclude one entry per outcome.`,
-        },
-      ],
-    }),
-  })
+  const attempt = () =>
+    fetch(`${VULTR_BASE}chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${VULTR_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: VULTR_MODEL,
+        max_tokens: 8192,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'user',
+            content: `${prompt}\n\nRespond with ONLY a JSON object, no other text, in exactly this shape:\n{"outcomes":[{"outcome_id":"<id exactly as given>","probability":<number 0-100>,"rationale":"<1-2 sentences>"}]}\nInclude one entry per outcome.`,
+          },
+        ],
+      }),
+    })
+
+  let res = await attempt()
+  // Serverless inference cold-starts on the first request after idle,
+  // surfaced as a 502/503/504 by Vultr's gateway — one retry usually lands
+  // on the now-warm instance.
+  if (!res.ok && [502, 503, 504].includes(res.status)) res = await attempt()
   if (!res.ok) throw new Error(`Vultr ${res.status}: ${(await res.text()).slice(0, 300)}`)
   const body = await res.json()
   return extractJson(body?.choices?.[0]?.message?.content ?? '')

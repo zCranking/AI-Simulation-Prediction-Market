@@ -39,17 +39,22 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Cron endpoint authenticates itself via CRON_SECRET, not a user session
+  if (pathname.startsWith('/api/ai-analyst/tick')) {
+    return supabaseResponse
+  }
+
   // Redirect unauthenticated users away from protected routes
-  if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
+  if (!user && !pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Redirect logged-in users away from auth pages
-  if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
+  // Redirect logged-in users away from the login page
+  if (user && pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/markets'
     return NextResponse.redirect(url)
   }
 

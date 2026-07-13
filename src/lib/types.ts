@@ -1,204 +1,53 @@
-export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
+// App-level types, derived from the generated schema types in
+// ./database.types.ts (regenerate that file after migrations).
+import type { Database } from './database.types'
 
-export interface Database {
-  public: {
-    Tables: {
-      users: {
-        Row: {
-          id: string
-          name: string
-          points_remaining: number
-          setup_completed: boolean
-          created_at: string
-        }
-        Insert: {
-          id: string
-          name: string
-          points_remaining?: number
-          setup_completed?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          points_remaining?: number
-          setup_completed?: boolean
-          created_at?: string
-        }
-      }
-      candidates: {
-        Row: {
-          id: string
-          name: string
-          party: string
-          photo: string
-          position: string
-          base_probability: number
-          seed_points: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          party: string
-          photo: string
-          position?: string
-          base_probability?: number
-          seed_points?: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          party?: string
-          photo?: string
-          position?: string
-          base_probability?: number
-          seed_points?: number
-          created_at?: string
-        }
-      }
-      predictions: {
-        Row: {
-          id: string
-          user_id: string
-          candidate_id: string
-          points_allocated: number
-          probability_at_prediction: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          candidate_id: string
-          points_allocated: number
-          probability_at_prediction?: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          candidate_id?: string
-          points_allocated?: number
-          probability_at_prediction?: number
-          created_at?: string
-        }
-      }
-      election_settings: {
-        Row: {
-          id: number
-          status: 'active' | 'resolved'
-          winner_candidate_id: string | null
-        }
-        Insert: {
-          id?: number
-          status?: 'active' | 'resolved'
-          winner_candidate_id?: string | null
-        }
-        Update: {
-          id?: number
-          status?: 'active' | 'resolved'
-          winner_candidate_id?: string | null
-        }
-      }
-      poll_questions: {
-        Row: {
-          id: string
-          title: string
-          position: string
-          status: 'active' | 'closed'
-          created_by: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          title: string
-          position?: string
-          status?: 'active' | 'closed'
-          created_by?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          title?: string
-          position?: string
-          status?: 'active' | 'closed'
-          created_by?: string | null
-          created_at?: string
-        }
-      }
-      poll_votes: {
-        Row: {
-          id: string
-          question_id: string
-          user_id: string
-          candidate_id: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          question_id: string
-          user_id: string
-          candidate_id: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          question_id?: string
-          user_id?: string
-          candidate_id?: string
-          created_at?: string
-        }
-      }
-    }
-    Functions: {
-      place_prediction: {
-        Args: {
-          p_candidate_id: string
-          p_points: number
-        }
-        Returns: {
-          success: boolean
-          message: string
-        }
-      }
-    }
-  }
+export type { Database, Json } from './database.types'
+
+export type MarketType = 'single_winner' | 'binary' | 'multi_winner'
+export type MarketStatus = 'draft' | 'active' | 'resolved' | 'voided'
+
+type Tables = Database['public']['Tables']
+
+export type User = Tables['users']['Row']
+export type MarketGroup = Tables['market_groups']['Row']
+export type MarketOutcome = Tables['market_outcomes']['Row']
+export type Stake = Tables['stakes']['Row']
+export type AiForecast = Tables['ai_forecasts']['Row']
+export type PollQuestion = Tables['poll_questions']['Row']
+export type PollVote = Tables['poll_votes']['Row']
+
+/** markets Row with the check-constrained text columns narrowed to their unions */
+export interface Market extends Omit<Tables['markets']['Row'], 'market_type' | 'status'> {
+  market_type: MarketType
+  status: MarketStatus
 }
 
-export type User = Database['public']['Tables']['users']['Row']
-export type Candidate = Database['public']['Tables']['candidates']['Row']
-export type Prediction = Database['public']['Tables']['predictions']['Row']
-export type ElectionSettings = Database['public']['Tables']['election_settings']['Row']
-export type PollQuestion = Database['public']['Tables']['poll_questions']['Row']
-export type PollVote = Database['public']['Tables']['poll_votes']['Row']
-
-export interface CandidateWithProbability extends Candidate {
-  total_points: number
-
-  /**
-   * Final probability after market + community adjustments
-   * Example: 63.4
-   */
+export interface OutcomeWithProbability extends MarketOutcome {
+  /** Crowd probability (0–100) after smoothing + community nudge */
   probability: number
-
-  /**
-   * Distance from a neutral 50/50 market.
-   *
-   * Examples:
-   * 50% => 0
-   * 60% => +10
-   * 75% => +25
-   * 40% => -10
-   * 25% => -25
-   */
-  spread: number
+  /** Latest AI Analyst probability for this outcome, if any */
+  ai_probability: number | null
+  /** Latest AI Analyst rationale for this outcome, if any */
+  ai_rationale: string | null
 }
 
+/** JSON payload returned by the place_stake RPC (cast the Json result to this) */
+export interface StakeResult {
+  success: boolean
+  message: string
+  balance_remaining?: number
+  probability_at_stake?: number
+}
+
+/** Row shape of get_leaderboard_v2 with real nullability (the generated
+    types can't see that id/points_remaining/brier_score are null for the
+    AI row / unresolved markets) */
 export interface LeaderboardEntry {
-  id: string
+  participant_type: 'user' | 'ai'
+  id: string | null
   name: string
-  points_remaining: number
-  brier_score: number | null
+  points_remaining: number | null
   prediction_count: number
+  brier_score: number | null
 }

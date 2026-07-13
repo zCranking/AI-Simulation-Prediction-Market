@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import AdminPanel from './AdminPanel'
-import type { Candidate, Prediction, ElectionSettings } from '../../lib/types'
+import type { Market, MarketGroup, MarketOutcome, AiForecast } from '../../lib/types'
 
 export default async function AdminPage() {
   const cookieStore = await cookies()
@@ -18,17 +18,24 @@ export default async function AdminPage() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const [r1, r2, r3] = await Promise.all([
-    db.from('candidates').select('*').order('created_at'),
-    db.from('predictions').select('candidate_id, points_allocated'),
-    db.from('election_settings').select('*').eq('id', 1).single(),
+  const [r1, r2, r3, r4] = await Promise.all([
+    db.from('markets').select('*').order('created_at'),
+    db.from('market_outcomes').select('*').order('sort_order'),
+    db.from('market_groups').select('*').order('created_at'),
+    db
+      .from('ai_forecasts')
+      .select('market_id, created_at, model')
+      .order('created_at', { ascending: false })
+      .limit(200),
   ])
 
   return (
     <AdminPanel
-      initialCandidates={(r1.data ?? []) as Candidate[]}
-      predictions={(r2.data ?? []) as Pick<Prediction, 'candidate_id' | 'points_allocated'>[]}
-      electionSettings={r3.data as ElectionSettings | null}
+      initialMarkets={(r1.data ?? []) as Market[]}
+      initialOutcomes={(r2.data ?? []) as MarketOutcome[]}
+      groups={(r3.data ?? []) as MarketGroup[]}
+      recentForecasts={(r4.data ?? []) as Pick<AiForecast, 'market_id' | 'created_at' | 'model'>[]}
+      aiConfigured={Boolean(process.env.VULTR_API_KEY || process.env.ANTHROPIC_API_KEY)}
     />
   )
 }

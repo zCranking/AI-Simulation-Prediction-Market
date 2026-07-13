@@ -1,532 +1,543 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { computeProbabilities } from '../../lib/market'
+import type { Market, MarketGroup, MarketOutcome, MarketType, AiForecast } from '../../lib/types'
 import {
-  updateCandidate,
-  uploadCandidatePhoto,
-  addCandidate,
-  deleteCandidate,
-  bulkAddCandidates,
-  updateElectionStatus,
   adminLogout,
+  createMarket,
+  updateMarket,
+  deleteMarket,
+  resolveMarket,
+  voidMarket,
+  addOutcome,
+  deleteOutcome,
+  uploadOutcomePhoto,
 } from './actions'
-import type { Candidate, Prediction, ElectionSettings } from '../../lib/types'
 
 interface Props {
-  initialCandidates: Candidate[]
-  predictions: Pick<Prediction, 'candidate_id' | 'points_allocated'>[]
-  electionSettings: ElectionSettings | null
+  initialMarkets: Market[]
+  initialOutcomes: MarketOutcome[]
+  groups: MarketGroup[]
+  recentForecasts: Pick<AiForecast, 'market_id' | 'created_at' | 'model'>[]
+  aiConfigured: boolean
 }
 
-type EditState = { name: string; party: string; position: string; baseProbability: number }
+const statusStyles: Record<Market['status'], string> = {
+  draft: 'bg-gray-800 text-gray-400 border-gray-700',
+  active: 'bg-green-950 text-green-400 border-green-700',
+  resolved: 'bg-indigo-950 text-indigo-300 border-indigo-700',
+  voided: 'bg-red-950 text-red-400 border-red-800',
+}
 
-export default function AdminPanel({ initialCandidates, predictions, electionSettings }: Props) {
+export default function AdminPanel({
+  initialMarkets,
+  initialOutcomes,
+  groups,
+  recentForecasts,
+  aiConfigured,
+}: Props) {
   const router = useRouter()
-  const [candidates, setCandidates] = useState(initialCandidates)
-  const [edits, setEdits] = useState<Record<string, EditState>>(
-    Object.fromEntries(
-      initialCandidates.map((c) => [
-        c.id,
-        { name: c.name, party: c.party, position: c.position, baseProbability: c.base_probability ?? 0 },
-      ])
-    )
-  )
-  const [photoPreviews, setPhotoPreviews] = useState<Record<string, string>>({})
-  const [savingField, setSavingField] = useState<Record<string, boolean>>({})
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const markets = initialMarkets
+  const outcomes = initialOutcomes
+  const [openMarketId, setOpenMarketId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
-  // Election settings
-  const [elecStatus, setElecStatus] = useState<'active' | 'resolved'>(
-    electionSettings?.status ?? 'active'
-  )
-  const [winnerId, setWinnerId] = useState(electionSettings?.winner_candidate_id ?? '')
-  const [elecLoading, setElecLoading] = useState(false)
+  // Create form
+  const [showCreate, setShowCreate] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newType, setNewType] = useState<MarketType>('binary')
+  const [newWinners, setNewWinners] = useState(1)
+  const [newGroupId, setNewGroupId] = useState<string>('')
 
-  // Add candidate form
-  const [newName, setNewName] = useState('')
-  const [newParty, setNewParty] = useState('')
-  const [newPosition, setNewPosition] = useState('')
-  const [newBaseProbability, setNewBaseProbability] = useState(0)
-  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null)
-  const [newPhotoPreview, setNewPhotoPreview] = useState('')
-  const [addLoading, setAddLoading] = useState(false)
-  const [addError, setAddError] = useState('')
+  // Resolution picker: marketId -> selected winner outcome ids
+  const [winnerPicks, setWinnerPicks] = useState<Record<string, string[]>>({})
 
-  // Bulk import
-  const [bulkText, setBulkText] = useState('')
-  const [bulkLoading, setBulkLoading] = useState(false)
-  const [bulkError, setBulkError] = useState('')
-
-  const withProb = computeProbabilities(candidates, predictions)
-  const probMap = Object.fromEntries(withProb.map((c) => [c.id, c.probability]))
-
-  function updateEdit(id: string, field: keyof EditState, value: string | number) {
-    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }))
-  }
-
-  async function handleSave(id: string) {
-    setSavingField((p) => ({ ...p, [id]: true }))
-    setFieldErrors((p) => ({ ...p, [id]: '' }))
-    const e = edits[id]
-    const result = await updateCandidate(id, e.name, e.party, e.position, e.baseProbability)
-    if (result.error) {
-      setFieldErrors((p) => ({ ...p, [id]: result.error! }))
-    } else {
-      setCandidates((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? { ...c, name: e.name, party: e.party, position: e.position, base_probability: e.baseProbability }
-            : c
-        )
-      )
+  const lastForecastByMarket = useMemo(() => {
+    const map = new Map<string, { created_at: string; model: string }>()
+    for (const f of recentForecasts) {
+      if (!map.has(f.market_id)) map.set(f.market_id, f)
     }
-    setSavingField((p) => ({ ...p, [id]: false }))
+    return map
+  }, [recentForecasts])
+
+  function refresh() {
+    router.refresh()
   }
 
-  async function handlePhotoSelect(id: string, file: File) {
-    setPhotoPreviews((p) => ({ ...p, [id]: URL.createObjectURL(file) }))
-    setSavingField((p) => ({ ...p, [id + '_photo']: true }))
-    setFieldErrors((p) => ({ ...p, [id]: '' }))
-
-    const fd = new FormData()
-    fd.append('photo', file)
-    fd.append('candidateId', id)
-    const result = await uploadCandidatePhoto(fd)
-
-    if (result.error) {
-      setFieldErrors((p) => ({ ...p, [id]: result.error! }))
-      setPhotoPreviews((p) => ({ ...p, [id]: '' }))
-    } else if (result.url) {
-      setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, photo: result.url! } : c)))
-    }
-    setSavingField((p) => ({ ...p, [id + '_photo']: false }))
-  }
-
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"? This will also remove all predictions for this candidate and cannot be undone.`)) return
-    const result = await deleteCandidate(id)
-    if (result.error) {
-      alert(result.error)
-    } else {
-      setCandidates((prev) => prev.filter((c) => c.id !== id))
+  async function run(action: () => Promise<{ error?: string; message?: string } | void>) {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await action()
+      if (result && 'error' in result && result.error) setError(result.error)
+      else {
+        if (result && 'message' in result && result.message) setNotice(result.message)
+        refresh()
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
     }
   }
 
-  async function handleAddCandidate(e: React.FormEvent) {
-    e.preventDefault()
-    setAddLoading(true)
-    setAddError('')
-    const fd = new FormData()
-    fd.append('name', newName)
-    fd.append('party', newParty)
-    fd.append('position', newPosition)
-    fd.append('baseProbability', String(newBaseProbability))
-    if (newPhotoFile) fd.append('photo', newPhotoFile)
-
-    const result = await addCandidate(fd)
-    if (result.error) {
-      setAddError(result.error)
-    } else if (result.candidate) {
-      const c = result.candidate
-      setCandidates((prev) => [...prev, c])
-      setEdits((prev) => ({
-        ...prev,
-        [c.id]: { name: c.name, party: c.party, position: c.position, baseProbability: c.base_probability ?? 0 },
-      }))
-      setNewName('')
-      setNewParty('')
-      setNewPosition('')
-      setNewBaseProbability(0)
-      setNewPhotoFile(null)
-      setNewPhotoPreview('')
+  async function triggerForecast(marketId: string, model: 'fast' | 'deep') {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/ai-analyst/run/${marketId}?model=${model}`, { method: 'POST' })
+      const body = await res.json()
+      if (body.success) {
+        setNotice(`AI forecast saved (${model === 'deep' ? 'deep' : 'fast'})`)
+        refresh()
+      } else {
+        setError(body.message ?? 'Forecast failed')
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
     }
-    setAddLoading(false)
-  }
-
-  async function handleBulkImport() {
-    setBulkError('')
-    const rows = bulkText
-      .trim()
-      .split('\n')
-      .filter((l) => l.trim())
-      .map((l) => {
-        const [name = '', party = '', position = ''] = l.split(',').map((p) => p.trim())
-        return { name, party, position }
-      })
-
-    if (!rows.length) return
-    setBulkLoading(true)
-    const result = await bulkAddCandidates(rows)
-    if (result.error) {
-      setBulkError(result.error)
-    } else {
-      setBulkText('')
-      router.refresh()
-    }
-    setBulkLoading(false)
-  }
-
-  async function handleElectionSave() {
-    setElecLoading(true)
-    const result = await updateElectionStatus(elecStatus, winnerId || undefined)
-    if (result.error) alert(result.error)
-    setElecLoading(false)
-  }
-
-  async function handleLogout() {
-    await adminLogout()
-    router.push('/admin/login')
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 space-y-12">
-
-      {/* Header */}
+    <div className="py-6 space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Admin Panel</h1>
-          <p className="text-gray-400 text-sm mt-1">Manage candidates, photos, and election settings</p>
+          <h1 className="text-2xl font-bold text-white">Admin — Markets</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Create markets, manage outcomes, trigger AI forecasts, resolve winners.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            ← Market
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
+        <button
+          onClick={async () => {
+            await adminLogout()
+            router.push('/admin/login')
+          }}
+          className="text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5"
+        >
+          Log out
+        </button>
       </div>
 
-      {/* ── Candidates ──────────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xl font-semibold text-white mb-4">
-          Candidates
-          <span className="ml-2 text-sm text-gray-500 font-normal">({candidates.length})</span>
-        </h2>
-
-        {candidates.length === 0 && (
-          <p className="text-gray-500 text-sm">No candidates yet. Add one below.</p>
-        )}
-
-        <div className="space-y-4">
-          {candidates.map((c) => {
-            const edit = edits[c.id] ?? {
-              name: c.name,
-              party: c.party,
-              position: c.position,
-              baseProbability: c.base_probability ?? 0,
-            }
-            const photoSrc = photoPreviews[c.id] || c.photo
-            const prob = probMap[c.id]
-
-            return (
-              <div key={c.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <div className="flex flex-col sm:flex-row gap-5">
-
-                  {/* Photo upload area */}
-                  <label className="cursor-pointer shrink-0 relative group w-20 h-20">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-800 border-2 border-gray-700 group-hover:border-indigo-500 transition-colors">
-                      {photoSrc ? (
-                        <img src={photoSrc} alt={c.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs text-center px-1 leading-tight">
-                          No photo
-                        </div>
-                      )}
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity text-white text-xs font-semibold text-center px-1">
-                      {savingField[c.id + '_photo'] ? 'Uploading…' : 'Click to upload'}
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0]
-                        if (f) handlePhotoSelect(c.id, f)
-                      }}
-                    />
-                  </label>
-
-                  {/* Editable fields */}
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Name</label>
-                      <input
-                        value={edit.name}
-                        onChange={(e) => updateEdit(c.id, 'name', e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Party</label>
-                      <select
-                        value={edit.party}
-                        onChange={(e) => updateEdit(c.id, 'party', e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="Whig">Whig</option>
-                        <option value="Federalist">Federalist</option>
-                        <option value="Nonpartisan">Nonpartisan</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Position</label>
-                      <input
-                        value={edit.position}
-                        onChange={(e) => updateEdit(c.id, 'position', e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="e.g. Governor"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">
-                        Base percentage
-                        {prob !== undefined && (
-                          <span className="ml-1 text-indigo-400">→ {prob.toFixed(1)}%</span>
-                        )}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={edit.baseProbability}
-                        onChange={(e) =>
-                          updateEdit(c.id, 'baseProbability', parseFloat(e.target.value) || 0)
-                        }
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="0"
-                      />
-                      <p className="text-xs text-gray-600 mt-0.5">Saved directly as a percent</p>
-                    </div>
-                  </div>
-                </div>
-
-                {fieldErrors[c.id] && (
-                  <p className="text-red-400 text-sm mt-2">{fieldErrors[c.id]}</p>
-                )}
-
-                <div className="flex items-center gap-2 mt-4">
-                  <button
-                    onClick={() => handleSave(c.id)}
-                    disabled={savingField[c.id]}
-                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
-                  >
-                    {savingField[c.id] ? 'Saving…' : 'Save Changes'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(c.id, edit.name)}
-                    className="text-red-400 hover:text-red-300 text-sm font-medium px-4 py-1.5 rounded-lg border border-transparent hover:border-red-900 hover:bg-red-950 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+      {!aiConfigured && (
+        <div className="bg-amber-950/40 border border-amber-700 rounded-2xl p-4 text-sm text-amber-300">
+          <span className="font-semibold">AI Analyst is inactive:</span> set{' '}
+          <code className="bg-gray-800 px-1 rounded">VULTR_API_KEY</code> or{' '}
+          <code className="bg-gray-800 px-1 rounded">ANTHROPIC_API_KEY</code> in your environment
+          to enable forecasts.
         </div>
-      </section>
+      )}
+      {error && (
+        <div className="bg-red-950/40 border border-red-800 rounded-2xl p-4 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="bg-green-950/40 border border-green-800 rounded-2xl p-4 text-sm text-green-300">
+          {notice}
+        </div>
+      )}
 
-      {/* ── Add Candidate ──────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xl font-semibold text-white mb-4">Add Candidate</h2>
-        <form
-          onSubmit={handleAddCandidate}
-          className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4"
+      {/* Create market */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="text-sm font-semibold text-white"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Name *</label>
-              <input
-                required
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Candidate name"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Party *</label>
+          {showCreate ? '− Cancel' : '+ New market'}
+        </button>
+
+        {showCreate && (
+          <div className="mt-4 space-y-3">
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Market title (e.g. 'Will it rain at graduation?')"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+            />
+            <textarea
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              placeholder="Description / resolution criteria — also given to the AI Analyst as context"
+              rows={2}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+            />
+            <div className="flex gap-3 flex-wrap items-center">
               <select
-                required
-                value={newParty}
-                onChange={(e) => setNewParty(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={newType}
+                onChange={(e) => setNewType(e.target.value as MarketType)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
               >
-                <option value="">— Select party —</option>
-                <option value="Whig">Whig</option>
-                <option value="Federalist">Federalist</option>
-                <option value="Nonpartisan">Nonpartisan</option>
+                <option value="binary">Binary (Yes/No)</option>
+                <option value="single_winner">Single winner (many outcomes)</option>
+                <option value="multi_winner">Multi winner (top N)</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Position *</label>
-              <input
-                required
-                value={newPosition}
-                onChange={(e) => setNewPosition(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="e.g. Governor"
-                list="position-suggestions"
-              />
-              <datalist id="position-suggestions">
-                <option value="Attorney General" />
-                <option value="Controller" />
-                <option value="Governor" />
-                <option value="Insurance Commissioner" />
-                <option value="Lt. Governor" />
-                <option value="Secretary of State" />
-                <option value="State Treasurer" />
-                <option value="Superintendent of Public Instruction" />
-                <option value="Supreme Court Justice" />
-              </datalist>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Base percentage</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={newBaseProbability}
-                onChange={(e) => setNewBaseProbability(parseFloat(e.target.value) || 0)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">
-              Photo <span className="text-gray-600">(optional — can upload later by clicking the photo)</span>
-            </label>
-            <div className="flex items-center gap-3">
-              {newPhotoPreview && (
-                <img
-                  src={newPhotoPreview}
-                  alt="preview"
-                  className="w-12 h-12 rounded-lg object-cover border border-gray-700"
-                />
+              {newType === 'multi_winner' && (
+                <label className="text-sm text-gray-400 flex items-center gap-2">
+                  Winners:
+                  <input
+                    type="number"
+                    min={1}
+                    value={newWinners}
+                    onChange={(e) => setNewWinners(parseInt(e.target.value, 10) || 1)}
+                    className="w-16 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm"
+                  />
+                </label>
               )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) {
-                    setNewPhotoFile(f)
-                    setNewPhotoPreview(URL.createObjectURL(f))
-                  }
-                }}
-                className="text-sm text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-white hover:file:bg-gray-600 cursor-pointer"
-              />
-            </div>
-          </div>
-
-          {addError && (
-            <p className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-lg px-3 py-2">
-              {addError}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={addLoading}
-            className="bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors"
-          >
-            {addLoading ? 'Adding…' : '+ Add Candidate'}
-          </button>
-        </form>
-      </section>
-
-      {/* ── Bulk Import ────────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xl font-semibold text-white mb-1">Bulk Import</h2>
-        <p className="text-sm text-gray-400 mb-3">
-          One candidate per line:{' '}
-          <code className="text-indigo-400 bg-gray-800 px-1.5 py-0.5 rounded">Name, Party, Position</code>
-          {' '}— photos can be uploaded after via the cards above.
-        </p>
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <textarea
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            rows={6}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
-            placeholder={'Alice Smith, Whig, Governor\nBob Jones, Federalist, Attorney General'}
-          />
-          {bulkError && (
-            <p className="text-red-400 text-sm mt-2">{bulkError}</p>
-          )}
-          <button
-            onClick={handleBulkImport}
-            disabled={bulkLoading || !bulkText.trim()}
-            className="mt-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors"
-          >
-            {bulkLoading ? 'Importing…' : 'Import All'}
-          </button>
-        </div>
-      </section>
-
-      {/* ── Election Settings ─────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-xl font-semibold text-white mb-4">Election Settings</h2>
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-          <div>
-            <label className="block text-xs text-gray-400 mb-2">Status</label>
-            <div className="flex gap-2">
-              {(['active', 'resolved'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setElecStatus(s)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    elecStatus === s
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                  }`}
-                >
-                  {s === 'active' ? 'Active (Betting open)' : 'Resolved (Closed)'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {elecStatus === 'resolved' && (
-            <div>
-              <label className="block text-xs text-gray-400 mb-2">Winner</label>
               <select
-                value={winnerId}
-                onChange={(e) => setWinnerId(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={newGroupId}
+                onChange={(e) => setNewGroupId(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
               >
-                <option value="">— Select winner —</option>
-                {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.party})
+                <option value="">No group</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
                   </option>
                 ))}
               </select>
             </div>
-          )}
+            <div className="flex gap-2">
+              {(['draft', 'active'] as const).map((status) => (
+                <button
+                  key={status}
+                  disabled={busy || !newTitle.trim()}
+                  onClick={() =>
+                    run(async () => {
+                      const result = await createMarket({
+                        title: newTitle,
+                        description: newDescription,
+                        marketType: newType,
+                        winnersCount: newWinners,
+                        groupId: newGroupId || null,
+                        status,
+                      })
+                      if (!result.error) {
+                        setNewTitle('')
+                        setNewDescription('')
+                        setShowCreate(false)
+                        if (result.market) setOpenMarketId(result.market.id)
+                      }
+                      return result
+                    })
+                  }
+                  className={`text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50 ${
+                    status === 'active'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      : 'bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700'
+                  }`}
+                >
+                  Create {status === 'active' ? '& publish' : 'as draft'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
-          <button
-            onClick={handleElectionSave}
-            disabled={elecLoading || (elecStatus === 'resolved' && !winnerId)}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors"
+      {/* Market list */}
+      <div className="space-y-3">
+        {markets.map((market) => {
+          const marketOutcomes = outcomes.filter((o) => o.market_id === market.id)
+          const isOpen = openMarketId === market.id
+          const picks = winnerPicks[market.id] ?? []
+          const lastForecast = lastForecastByMarket.get(market.id)
+          const canResolve = market.status === 'active' && marketOutcomes.length >= 2
+
+          return (
+            <div key={market.id} className="bg-gray-900 border border-gray-800 rounded-2xl">
+              <button
+                onClick={() => setOpenMarketId(isOpen ? null : market.id)}
+                className="w-full flex items-center justify-between gap-3 p-4 text-left"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-white truncate">{market.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {marketOutcomes.length} outcomes · {market.market_type}
+                    {market.market_type === 'multi_winner' ? ` (top ${market.winners_count})` : ''}
+                    {lastForecast &&
+                      ` · last AI forecast ${new Date(lastForecast.created_at).toLocaleString()}`}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full border uppercase ${statusStyles[market.status]}`}
+                >
+                  {market.status}
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-gray-800 p-4 space-y-4">
+                  {/* Market controls */}
+                  <div className="flex gap-2 flex-wrap">
+                    {market.status === 'draft' && (
+                      <>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            run(() =>
+                              updateMarket(market.id, {
+                                title: market.title,
+                                description: market.description,
+                                status: 'active',
+                              })
+                            )
+                          }
+                          className="text-xs font-semibold bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                        >
+                          Publish
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            if (confirm(`Delete draft "${market.title}"?`))
+                              run(() => deleteMarket(market.id))
+                          }}
+                          className="text-xs font-semibold bg-red-900 hover:bg-red-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                        >
+                          Delete draft
+                        </button>
+                      </>
+                    )}
+                    {market.status === 'active' && (
+                      <>
+                        <button
+                          disabled={busy || !aiConfigured}
+                          onClick={() => triggerForecast(market.id, 'fast')}
+                          className="text-xs font-semibold bg-purple-800 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                          title="Same model the cron uses"
+                        >
+                          🤖 Re-forecast now
+                        </button>
+                        <button
+                          disabled={busy || !aiConfigured}
+                          onClick={() => triggerForecast(market.id, 'deep')}
+                          className="text-xs font-semibold bg-purple-950 hover:bg-purple-900 border border-purple-700 text-purple-300 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                          title="Slower, deeper one-off analysis (same model as fast on Vultr)"
+                        >
+                          🤖 Deep analysis
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Void "${market.title}"? All stakes will be refunded at face value.`
+                              )
+                            )
+                              run(() => voidMarket(market.id))
+                          }}
+                          className="text-xs font-semibold bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                        >
+                          Void market
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Resolution */}
+                  {canResolve && (
+                    <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 space-y-3">
+                      <p className="text-sm font-semibold text-white">
+                        Resolve — pick {market.winners_count} winner
+                        {market.winners_count > 1 ? 's' : ''} ({picks.length}/{market.winners_count}{' '}
+                        selected)
+                      </p>
+                      <div className="flex gap-2 flex-wrap">
+                        {marketOutcomes.map((o) => {
+                          const picked = picks.includes(o.id)
+                          return (
+                            <button
+                              key={o.id}
+                              onClick={() =>
+                                setWinnerPicks((prev) => {
+                                  const current = prev[market.id] ?? []
+                                  const next = picked
+                                    ? current.filter((id) => id !== o.id)
+                                    : current.length < market.winners_count
+                                      ? [...current, o.id]
+                                      : current
+                                  return { ...prev, [market.id]: next }
+                                })
+                              }
+                              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                                picked
+                                  ? 'bg-yellow-900/50 border-yellow-600 text-yellow-300'
+                                  : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              {picked ? '🏆 ' : ''}
+                              {o.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <button
+                        disabled={busy || picks.length !== market.winners_count}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Resolve "${market.title}" with winner(s): ${marketOutcomes
+                                .filter((o) => picks.includes(o.id))
+                                .map((o) => o.label)
+                                .join(
+                                  ', '
+                                )}? Winning stakes are paid out immediately. This cannot be undone.`
+                            )
+                          )
+                            run(() => resolveMarket(market.id, picks))
+                        }}
+                        className="text-xs font-semibold bg-yellow-700 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+                      >
+                        Resolve market
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Outcomes */}
+                  <OutcomeEditor market={market} outcomes={marketOutcomes} busy={busy} run={run} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function OutcomeEditor({
+  market,
+  outcomes,
+  busy,
+  run,
+}: {
+  market: Market
+  outcomes: MarketOutcome[]
+  busy: boolean
+  run: (action: () => Promise<{ error?: string } | void>) => Promise<void>
+}) {
+  const [label, setLabel] = useState('')
+  const [party, setParty] = useState('')
+  const [baseProbability, setBaseProbability] = useState('')
+  const editable = market.status === 'draft' || market.status === 'active'
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold text-white">Outcomes</p>
+      <div className="space-y-2">
+        {outcomes.map((o) => (
+          <div
+            key={o.id}
+            className="flex items-center gap-3 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2"
           >
-            {elecLoading ? 'Saving…' : 'Save Election Settings'}
+            {o.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={o.photo_url}
+                alt={o.label}
+                className="w-8 h-8 rounded-full object-cover bg-gray-800 shrink-0"
+              />
+            ) : (
+              <label
+                className="w-8 h-8 rounded-full bg-gray-800 shrink-0 flex items-center justify-center text-xs text-gray-500 cursor-pointer hover:bg-gray-700"
+                title="Upload photo"
+              >
+                +
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const fd = new FormData()
+                    fd.set('photo', file)
+                    fd.set('outcomeId', o.id)
+                    run(() => uploadOutcomePhoto(fd))
+                  }}
+                />
+              </label>
+            )}
+            <span className="flex-1 text-sm text-white truncate">
+              {o.label}
+              {o.party && <span className="text-gray-500"> · {o.party}</span>}
+              {o.is_winner && <span> 🏆</span>}
+            </span>
+            <span className="text-xs text-gray-500 tabular-nums shrink-0">
+              {o.total_points} pts
+              {o.base_probability > 0 && ` · prior ${o.base_probability}%`}
+            </span>
+            {editable && (
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (confirm(`Delete outcome "${o.label}"? Any stakes on it are removed.`))
+                    run(() => deleteOutcome(o.id))
+                }}
+                className="text-xs text-red-400 hover:text-red-300 shrink-0 disabled:opacity-50"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {editable && market.market_type !== 'binary' && (
+        <div className="flex gap-2 flex-wrap items-center pt-1">
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="New outcome label"
+            className="flex-1 min-w-40 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
+          />
+          <input
+            value={party}
+            onChange={(e) => setParty(e.target.value)}
+            placeholder="Party (optional)"
+            className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
+          />
+          <input
+            value={baseProbability}
+            onChange={(e) => setBaseProbability(e.target.value)}
+            placeholder="Prior %"
+            type="number"
+            min={0}
+            max={100}
+            className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
+          />
+          <button
+            disabled={busy || !label.trim()}
+            onClick={() => {
+              const fd = new FormData()
+              fd.set('marketId', market.id)
+              fd.set('label', label)
+              fd.set('party', party)
+              fd.set('baseProbability', baseProbability)
+              run(async () => {
+                const result = await addOutcome(fd)
+                if (!result.error) {
+                  setLabel('')
+                  setParty('')
+                  setBaseProbability('')
+                }
+                return result
+              })
+            }}
+            className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg disabled:opacity-50"
+          >
+            Add outcome
           </button>
         </div>
-      </section>
+      )}
     </div>
   )
 }

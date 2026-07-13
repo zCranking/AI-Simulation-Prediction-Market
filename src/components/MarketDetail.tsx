@@ -181,7 +181,7 @@ export default function MarketDetail({
   const labelById = useMemo(() => new Map(outcomes.map((o) => [o.id, o.label])), [outcomes])
 
   return (
-    <div className="py-6 space-y-6">
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       <div>
         <Link href="/markets" className="text-sm text-gray-500 hover:text-gray-300">
           ← All markets

@@ -135,7 +135,7 @@ export default async function MarketsPage() {
   }
 
   return (
-    <div className="py-6 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-10">
       <div>
         <h1 className="text-2xl font-bold text-white">Markets</h1>
         <p className="text-gray-400 text-sm mt-1">

@@ -34,7 +34,7 @@ export default async function ResultsPage() {
   const anyLive = markets.some((m) => m.status === 'active')
 
   return (
-    <div className="py-6 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Market Odds</h1>

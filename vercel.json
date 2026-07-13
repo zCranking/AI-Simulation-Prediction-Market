@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/ai-analyst/tick",
+      "schedule": "0 */2 * * *"
+    }
+  ]
+}

@@ -43,9 +43,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">
             <span className="bg-linear-to-br from-amber-400 to-indigo-500 bg-clip-text text-transparent">
-              Toss&#8209;Up
+              AI Simulation Prediction Market
             </span>
           </h1>
           <p className="text-gray-400 mt-2">

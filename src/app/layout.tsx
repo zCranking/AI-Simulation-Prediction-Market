@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Nav from "../components/Nav";
-import { Analytics } from "@vercel/analytics/next";
+/*import { Analytics } from "@vercel/analytics/next";*/
 import type { User } from "../lib/types";
 
 const supabaseConfigured =
@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Toss-Up — AI vs. Crowd Prediction Markets",
+  title: "AI Simulation Prediction Market",
   description:
     "A simulated prediction market where the crowd sets the odds and an AI Analyst competes against them.",
 };
@@ -54,7 +54,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-gray-950 text-gray-100">
         {profile && <Nav user={profile} />}
         {children}
-        <Analytics />
+        {/* <Analytics /> */}
       </body>
     </html>
   );

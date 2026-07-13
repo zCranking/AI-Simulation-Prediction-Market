@@ -1,9 +1,9 @@
-# Toss-Up — AI Simulation Prediction Market
+# AI Simulation Prediction Market
 
 Built solo in one week as part of an AI-systems program focused on capitalizing on
-uncertainty — Toss-Up is a simulated, points-based prediction market (in the spirit of
-Kalshi/Polymarket) where the crowd sets the odds and an **LLM-powered AI Analyst
-forecasts independently, then gets scored against them.**
+uncertainty — AI Simulation Prediction Market is a simulated, points-based prediction
+market (in the spirit of Kalshi/Polymarket) where the crowd sets the odds and an
+**LLM-powered AI Analyst forecasts independently, then gets scored against them.**
 
 Live at every stage: stake points, watch the crowd odds move in real time, and see
 whether the AI Analyst agrees with the room or calls it differently.
@@ -15,6 +15,49 @@ whether the AI Analyst agrees with the room or calls it differently.
 
 Built with Next.js 16 (App Router), Supabase (Postgres + RLS + Realtime), Tailwind CSS v4,
 Recharts, and a swappable LLM provider (Vultr Serverless Inference or the Anthropic API).
+
+## Screenshots
+
+<!--
+  Drop PNGs into docs/screenshots/ with these exact filenames and they'll render
+  below automatically — no markdown edits needed. Suggested shots:
+    - markets.png        → the /markets grid (crowd odds visible on a few cards)
+    - market-detail.png  → /markets/[slug] with the AI rationale panel expanded
+    - leaderboard.png    → /leaderboard showing the AI Analyst row
+-->
+
+| Markets | Market detail (crowd vs. AI) | Leaderboard |
+|---|---|---|
+| ![Markets grid](docs/screenshots/markets.png) | ![Market detail with AI rationale](docs/screenshots/market-detail.png) | ![Leaderboard: humans vs AI](docs/screenshots/leaderboard.png) |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Crowd
+        User[Guest user] -->|stakes points| Stake[place_stake RPC]
+    end
+
+    subgraph "AI Analyst"
+        Cron[Vercel Cron / admin trigger] --> Prompt[Build market-state prompt]
+        Prompt --> LLM{Vultr or Claude}
+        LLM -->|probability + rationale| Forecast[ai_forecasts]
+    end
+
+    Stake -->|atomic balance check| DB[(Postgres: markets, outcomes, stakes)]
+    Forecast --> DB
+    DB -->|Realtime| Market[Market page: crowd % vs AI %]
+    DB -->|admin resolves| Payout[resolve_market: pay winners]
+    Payout --> Brier[Brier scoring]
+    Forecast --> Brier
+    Brier --> LB[Leaderboard: humans vs. AI]
+```
+
+Every stake goes through one atomic RPC so concurrent bets can never overdraw a
+balance; every AI forecast goes through the same validation/renormalization step
+regardless of which LLM provider produced it; and both humans and the AI Analyst are
+scored by the same Brier-score formula once a market resolves — the leaderboard is a
+level playing field, not two separate systems bolted together.
 
 ## How it works
 

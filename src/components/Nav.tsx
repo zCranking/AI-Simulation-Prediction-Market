@@ -50,12 +50,12 @@ export default function Nav({ user }: NavProps) {
         <div className="flex items-center gap-6">
           <Link
             href="/markets"
-            className="flex items-center gap-2 text-xl font-bold text-white tracking-tight"
+            className="flex items-center gap-2 min-w-0 text-sm sm:text-lg font-bold text-white tracking-tight"
           >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-amber-500 to-indigo-600 text-xs font-black text-white">
-              TU
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-amber-500 to-indigo-600 text-xs font-black text-white">
+              AI
             </span>
-            Toss&#8209;Up
+            <span className="min-w-0 truncate">AI Simulation Prediction Market</span>
           </Link>
           <div className="hidden sm:flex items-center gap-1">
             {links.map((l) => (

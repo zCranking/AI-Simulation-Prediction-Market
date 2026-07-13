@@ -19,8 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Election Predic — Election Prediction Platform",
-  description: "Track election chances, vote on campaign questions, and follow live sentiment.",
+  title: "Toss-Up — AI vs. Crowd Prediction Markets",
+  description:
+    "A simulated prediction market where the crowd sets the odds and an AI Analyst competes against them.",
 };
 
 export default async function RootLayout({
